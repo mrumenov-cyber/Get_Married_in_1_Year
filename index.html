@@ -20,7 +20,6 @@
 
       --pink:#ff4da6;
       --pink-deep:#e03f8f;
-      --pink-soft:#fff0f7;
 
       --ink:#1a1a1a;
       --muted:#555;
@@ -64,7 +63,7 @@
 
     /* Reveal section */
     .reveal-wrap{
-      max-width:1000px;width:100%;text-align:center;margin-bottom:26px;
+      max-width:1000px;width:100%;text-align:center;margin-bottom:20px;
     }
     .reveal-btn{
       background:var(--purple);color:#fff;border:none;padding:14px 28px;border-radius:999px;
@@ -74,15 +73,23 @@
     }
     .reveal-btn:hover{background:var(--purple-dark)}
     .reveal-btn:active{transform:translateY(1px)}
-    .reveal-btn[disabled]{
-      background:#d7d1ff;cursor:not-allowed;box-shadow:none;
-    }
-    .reveal-hint{
-      color:#888;margin-top:8px;font-size:14px;
-    }
-    .reveal-hint strong{color:#444;}
 
-    /* Offers hidden */
+    /* Unlock panel (shown after click, before 30 mins) */
+    .unlock-panel{
+      max-width:1000px;width:100%;margin:0 0 26px;
+      background:#fff3ff;border:1px solid #f3d3ff;border-radius:14px;
+      padding:16px 18px;display:none;
+    }
+    .unlock-panel h3{
+      margin:0 0 4px;font-size:16px;font-weight:800;color:#4d2048;
+    }
+    .unlock-panel p{margin:4px 0 10px;color:#5a3054}
+    .unlock-timer{
+      display:inline-block;background:#fff;border:1px solid #f7caff;
+      border-radius:999px;padding:6px 14px;font-weight:700;color:#4d2048;
+    }
+
+    /* offers hidden */
     .hidden-offers{display:none;}
 
     .tiers{
@@ -155,7 +162,7 @@
     .btn.purple{background:var(--purple);color:#fff;font-weight:700}
     .btn.purple:hover{background:var(--purple-dark)}
 
-    /* Testimonials */
+    /* testimonials */
     .testimonials{
       width:100%;max-width:1000px;margin:14px 0 60px;padding:0 0 6px 0;
     }
@@ -174,10 +181,8 @@
       display:inline-block;background:var(--pink);color:#fff;font-weight:800;
       text-decoration:none;padding:12px 18px;border-radius:999px;
       box-shadow:0 8px 18px rgba(255,77,166,.25);
-      transition:transform .1s, background .2s;
     }
     .t-cta a:hover{background:var(--pink-deep)}
-    .t-cta a:active{transform:translateY(1px)}
     .t-frame{position:relative;border-radius:14px;overflow:hidden;border:1px solid #ffcfe5;background:#fff;}
     .t-frame::before{content:"";display:block;padding-top:70vh;max-height:820px;min-height:520px;}
     .t-frame iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
@@ -220,12 +225,17 @@
     </div>
   </section>
 
-  <!-- Tell them what to do -->
+  <!-- Show-me-more step -->
   <section class="reveal-wrap">
-    <button id="reveal-btn" class="reveal-btn" disabled>Show me how 💗</button>
-    <div id="reveal-hint" class="reveal-hint">
-      Please watch the first 30 minutes of the class — after that you’ll unlock the details, packages, and how to work with me.
-    </div>
+    <button id="reveal-btn" class="reveal-btn">Show me more 💗</button>
+  </section>
+
+  <!-- Unlock panel (shown after click) -->
+  <section id="unlock-panel" class="unlock-panel">
+    <h3>Stay with me a bit longer 💕</h3>
+    <p>To protect the container and make sure you watch the teaching first, the details, bonuses, and application links unlock after 30 minutes.</p>
+    <div>Time until unlock:</div>
+    <div id="unlock-timer" class="unlock-timer">30:00</div>
   </section>
 
   <!-- EVERYTHING BELOW IS INITIALLY HIDDEN (offers + testimonials + book call) -->
@@ -342,11 +352,11 @@
       </div>
     </section>
 
-    <!-- Consultation (now hidden until unlock) -->
+    <!-- Consultation (also gated) -->
     <section id="consultation">
       <div class="consult">
         <div style="font-weight:700;font-size:20px;margin-bottom:6px">Need to clarify which path is yours?</div>
-        <div style="margin-bottom:12px">After watching the first 30 minutes, you can hop on a short call and we’ll map your 12-month path to marriage 💬</div>
+        <div style="margin-bottom:12px">Now that you’ve seen the options, you can hop on a short call and we’ll map your 12-month path to marriage 💬</div>
         <a href="https://calendly.com/feminine-enchantress/30min/" target="_blank" rel="noopener">Book your 30-min Call →</a>
       </div>
     </section>
@@ -358,16 +368,12 @@
 
   <script src="https://player.vimeo.com/api/player.js"></script>
   <script>
-  // expiry
+  // global countdown (your original)
   const EXPIRY_ISO = '2025-11-01T23:59:59+01:00';
   const expiryTs = new Date(EXPIRY_ISO).getTime();
   const $count = document.getElementById('countdown');
   const $overlay = document.getElementById('expired-overlay');
   const $iframe = document.getElementById('vimeo-iframe');
-  const $offersWrapper = document.getElementById('offers-wrapper');
-  const $revealBtn = document.getElementById('reveal-btn');
-  const $revealHint = document.getElementById('reveal-hint');
-
   let player;
   try { player = new Vimeo.Player($iframe); } catch(e){}
 
@@ -395,26 +401,48 @@
   update();
   setInterval(update, 1000);
 
-  // gate
+  // unlock flow
   const THIRTY_MIN = 30 * 60 * 1000;
-  let timePassed = false;
+  const $revealBtn = document.getElementById('reveal-btn');
+  const $unlockPanel = document.getElementById('unlock-panel');
+  const $unlockTimer = document.getElementById('unlock-timer');
+  const $offersWrapper = document.getElementById('offers-wrapper');
 
-  setTimeout(() => {
-    timePassed = true;
-    $revealBtn.disabled = false;
-    $revealHint.textContent = 'You watched 30 minutes — click to see your options, bonuses, and to book a call 💗';
-  }, THIRTY_MIN);
+  let userClickedToSeeMore = false;
+  let unlockTime = Date.now() + THIRTY_MIN;
+  let unlocked = false;
 
   $revealBtn.addEventListener('click', () => {
-    if(!timePassed){
-      $revealHint.textContent = 'Keep watching — the class unlocks the details after 30 minutes ✨';
+    userClickedToSeeMore = true;
+    $unlockPanel.style.display = 'block';
+    // scroll a bit
+    window.scrollTo({ top: $unlockPanel.offsetTop - 12, behavior: 'smooth' });
+  });
+
+  function updateUnlockTimer(){
+    if(unlocked) return;
+    const now = Date.now();
+    const diff = unlockTime - now;
+    if(diff <= 0){
+      unlocked = true;
+      // if user already clicked "show me more" -> show offers
+      if(userClickedToSeeMore){
+        $offersWrapper.style.display = 'block';
+        $unlockPanel.style.display = 'none';
+        window.scrollTo({ top: $offersWrapper.offsetTop - 16, behavior: 'smooth' });
+      } else {
+        // user didn't click yet: we just change text, offers will show when she clicks
+        $unlockTimer.textContent = 'Unlocked — click “Show me more”';
+      }
       return;
     }
-    $offersWrapper.style.display = 'block';
-    $revealBtn.style.display = 'none';
-    $revealHint.style.display = 'none';
-    window.scrollTo({ top: $offersWrapper.offsetTop - 16, behavior: 'smooth' });
-  });
+    const mins = Math.floor(diff / 60000);
+    const secs = Math.floor((diff % 60000) / 1000);
+    $unlockTimer.textContent = pad(mins) + ':' + pad(secs);
+  }
+
+  // run every second
+  setInterval(updateUnlockTimer, 1000);
   </script>
 </body>
 </html>
