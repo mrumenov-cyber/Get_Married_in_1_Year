@@ -70,9 +70,22 @@
     .reveal-btn:hover{background:var(--purple-dark)}
     .reveal-btn:active{transform:translateY(1px)}
 
-    /* unlock panel (we'll hide it in test mode) */
-    .unlock-panel{display:none !important;}
+    /* Unlock panel (shown after click, before 30 mins) */
+    .unlock-panel{
+      max-width:1000px;width:100%;margin:0 0 26px;
+      background:#fff3ff;border:1px solid #f3d3ff;border-radius:14px;
+      padding:16px 18px;display:none;
+    }
+    .unlock-panel h3{
+      margin:0 0 4px;font-size:16px;font-weight:800;color:#4d2048;
+    }
+    .unlock-panel p{margin:4px 0 10px;color:#5a3054}
+    .unlock-timer{
+      display:inline-block;background:#fff;border:1px solid #f7caff;
+      border-radius:999px;padding:6px 14px;font-weight:700;color:#4d2048;
+    }
 
+    /* offers hidden */
     .hidden-offers{display:none;}
 
     .tiers{
@@ -153,7 +166,7 @@
     .t-frame::before{content:"";display:block;padding-top:70vh;max-height:820px;min-height:520px;}
     .t-frame iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 
-    /* consultation */
+    /* consultation (also hidden) */
     #consultation{max-width:1000px;width:100%;margin:0 0 50px}
     .consult{
       background:#eaf4ff;border:1px solid #c6e2ff;border-radius:14px;padding:22px 24px;text-align:center;line-height:1.45
@@ -167,10 +180,10 @@
 </head>
 <body>
   <header>
-    <div class="countdown-box" id="countdown">TEST MODE – no expiry</div>
+    <div class="countdown-box" id="countdown">Loading...</div>
     <h1 class="hero-title">How to Get Married in 1 Year or less in 2026?</h1>
     <p class="hero-sub">Even if you have been unlucky in love, even if you never dated, even if you think you are too old, even if you just broke up..</p>
-    <div class="deadline" id="deadline-text">We begin: 05.01.2026 💛</div>
+    <div class="deadline" id="deadline-text">Your access is open for 2 days from your first visit 💛</div>
   </header>
 
   <!-- Video -->
@@ -193,7 +206,7 @@
     <button id="reveal-btn" class="reveal-btn">Show me more 💗</button>
   </section>
 
-  <!-- Unlock panel (hidden in test mode) -->
+  <!-- Unlock panel (shown after click) -->
   <section id="unlock-panel" class="unlock-panel">
     <h3>Stay with me a bit longer 💕</h3>
     <p>To protect the container and make sure you watch the teaching first, the details, bonuses, and application links unlock after 30 minutes.</p>
@@ -201,7 +214,7 @@
     <div id="unlock-timer" class="unlock-timer">30:00</div>
   </section>
 
-  <!-- OFFERS (we'll show them on click immediately) -->
+  <!-- HIDDEN CONTENT -->
   <div id="offers-wrapper" class="hidden-offers">
     <!-- ONLY GOLD / VIP -->
     <section class="tiers" id="cta-live">
@@ -276,32 +289,148 @@
     <!-- Consultation -->
     <section id="consultation">
       <div class="consult">
-        <div style="font-weight:700;font-size:20px;margin-bottom:6px">Need to clarify which path is yours?</div>
-        <div style="margin-bottom:12px">Now that you’ve seen the option, you can hop on a short call and we’ll map your 12-month path to marriage 💬</div>
+        <div style="font-weight:700;font-size:20px;margin-bottom:6px">Still not sure?</div>
+        <div style="margin-bottom:12px">Lets hop on a short call 💬</div>
         <a href="https://calendly.com/feminine-enchantress/30min/" target="_blank" rel="noopener">Book your 30-min Call →</a>
       </div>
     </section>
   </div>
 
   <footer>
-    Test version — everything is open 💜
+    This offer closes for you when your 2-day timer hits zero 💜
   </footer>
 
   <script src="https://player.vimeo.com/api/player.js"></script>
   <script>
-    const $revealBtn = document.getElementById('reveal-btn');
-    const $offersWrapper = document.getElementById('offers-wrapper');
+  // ====== 2-DAY PER-IP TIMER ======
+  // We will:
+  // 1. fetch user's public IP
+  // 2. look for localStorage["gmiy_firstSeen_ip_"+ip]
+  // 3. if missing -> store now
+  // 4. expiry = firstSeen + 48h
 
-    // show offers immediately on click
-    $revealBtn.addEventListener('click', () => {
+  const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
+  const STORAGE_PREFIX = 'gmiy_firstSeen_ip_';
+
+  const $count = document.getElementById('countdown');
+  const $overlay = document.getElementById('expired-overlay');
+  const $iframe = document.getElementById('vimeo-iframe');
+  const $offersWrapper = document.getElementById('offers-wrapper');
+  const $unlockPanel = document.getElementById('unlock-panel');
+  const $unlockTimer = document.getElementById('unlock-timer');
+  const $revealBtn = document.getElementById('reveal-btn');
+
+  let player;
+  try { player = new Vimeo.Player($iframe); } catch(e){}
+
+  function pad(n){ return String(n).padStart(2,'0'); }
+  function formatRemaining(ms){
+    if(ms <= 0) return '00:00:00';
+    const s = Math.floor(ms/1000);
+    const d = Math.floor(s/86400);
+    const h = Math.floor((s%86400)/3600);
+    const m = Math.floor((s%3600)/60);
+    const sec = s%60;
+    return (d>0? d + 'd ' : '') + pad(h)+':'+pad(m)+':'+pad(sec);
+  }
+
+  async function getFirstSeenMs(){
+    try{
+      const ipRes = await fetch('https://api.ipify.org?format=json');
+      const ipJson = await ipRes.json();
+      const ip = ipJson.ip || 'unknown-ip';
+      const key = STORAGE_PREFIX + ip;
+      let firstSeen = localStorage.getItem(key);
+      if(!firstSeen){
+        const nowIso = new Date().toISOString();
+        localStorage.setItem(key, nowIso);
+        return new Date(nowIso).getTime();
+      }
+      return new Date(firstSeen).getTime();
+    }catch(err){
+      // fallback: browser-only
+      const key = 'gmiy_firstSeen_local';
+      let firstSeen = localStorage.getItem(key);
+      if(!firstSeen){
+        const nowIso = new Date().toISOString();
+        localStorage.setItem(key, nowIso);
+        return new Date(nowIso).getTime();
+      }
+      return new Date(firstSeen).getTime();
+    }
+  }
+
+  let expiryTs = null;
+
+  async function initPersonalTimer(){
+    const firstSeenMs = await getFirstSeenMs();
+    expiryTs = firstSeenMs + TWO_DAYS_MS;
+    tick();
+    setInterval(tick, 1000);
+  }
+
+  function tick(){
+    if(!expiryTs) return;
+    const remaining = expiryTs - Date.now();
+    const expired = remaining <= 0;
+
+    if(expired){
+      $count.textContent = 'Expired';
+      $overlay.style.display = 'flex';
+      $offersWrapper.style.display = 'none';
+      $unlockPanel.style.display = 'none';
+      if(player){
+        player.pause().catch(()=>{}).finally(()=>{ if(player.unload) player.unload(); });
+      }
+    } else {
+      $count.textContent = formatRemaining(remaining);
+    }
+  }
+
+  // ====== 30-MIN UNLOCK FLOW (LOCAL ONLY) ======
+  const THIRTY_MIN = 30 * 60 * 1000;
+  let userClickedToSeeMore = false;
+  let unlockTime = Date.now() + THIRTY_MIN;
+  let unlocked = false;
+
+  $revealBtn.addEventListener('click', () => {
+    // if main offer already expired, do nothing
+    if(expiryTs && Date.now() > expiryTs){
+      return;
+    }
+    userClickedToSeeMore = true;
+    // if 30 mins already passed, show directly
+    if(unlocked){
       $offersWrapper.style.display = 'block';
-      window.scrollTo({ top: $offersWrapper.offsetTop - 16, behavior: 'smooth' });
-    });
+    } else {
+      $unlockPanel.style.display = 'block';
+      window.scrollTo({ top: $unlockPanel.offsetTop - 12, behavior: 'smooth' });
+    }
+  });
 
-    // video player (kept, just in case you want to pause later)
-    const $iframe = document.getElementById('vimeo-iframe');
-    let player;
-    try { player = new Vimeo.Player($iframe); } catch(e){}
+  function updateUnlockTimer(){
+    if(unlocked) return;
+    const now = Date.now();
+    const diff = unlockTime - now;
+    if(diff <= 0){
+      unlocked = true;
+      if(userClickedToSeeMore){
+        $offersWrapper.style.display = 'block';
+        $unlockPanel.style.display = 'none';
+        window.scrollTo({ top: $offersWrapper.offsetTop - 16, behavior: 'smooth' });
+      } else {
+        $unlockTimer.textContent = 'Unlocked — click “Show me more”';
+      }
+      return;
+    }
+    const mins = Math.floor(diff / 60000);
+    const secs = Math.floor((diff % 60000) / 1000);
+    $unlockTimer.textContent = pad(mins) + ':' + pad(secs);
+  }
+  setInterval(updateUnlockTimer, 1000);
+
+  // start everything
+  initPersonalTimer();
   </script>
 </body>
 </html>
